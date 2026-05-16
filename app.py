@@ -1,80 +1,86 @@
-import dash
-from dash import html, dcc, Input, Output
-import json
-from search_engine import INDEX_CACHE
+from dash import Dash, html, dcc
+from dash.dependencies import Input, Output
+from layout import render_layout
+from search_engine import search_entries
+from components.card_factory import create_card
 from markdown_loader import load_markdown
+from urllib.parse import urlparse, parse_qs
 
-app = dash.Dash(__name__)
+app = Dash(__name__, suppress_callback_exceptions=True)
 
-app.layout = html.Div([
-    html.H1("Knowledge DB Viewer"),
+# 全体レイアウト（サイドバー + 検索バー + ページコンテンツ）
+app.layout = render_layout()
 
-    dcc.Input(
-        id="search-box",
-        type="text",
-        placeholder="検索ワードを入力...",
-        style={"width": "400px", "marginBottom": "20px"}
-    ),
 
-    html.Div(id="search-results"),
-    html.Hr(),
-    html.Div(id="content-area")
-])
-
+# -----------------------------
+# URL ルーティング
+# -----------------------------
 @app.callback(
-    Output("search-results", "children"),
-    Input("search-box", "value")
+    Output("page-content", "children"),
+    Input("url", "pathname")
 )
-def update_results(query):
-    from search_engine import search_entries
+def display_page(pathname):
 
-    if not query:
-        return "検索ワードを入力してください。"
-
-    results = search_entries(query)
-
-    if not results:
-        return "一致するナレッジはありません。"
-
-    return html.Ul([
-        html.Li([
-            html.A(
-                f"{entry['title']}（{entry['category']}）",
-                href="#",
-                id={"type": "entry-link", "id": entry["id"]}
-            )
+    # トップページ
+    if pathname == "/" or pathname is None:
+        return html.Div([
+            html.H2("ナレッジベースへようこそ"),
+            html.P("左のカテゴリ、または検索バーから検索できます。")
         ])
-        for entry in results
-    ])
 
+    # カテゴリページ
+    if pathname.startswith("/category/"):
+        category_id = pathname.split("/")[-1]
+        results = search_entries(category=category_id)
+
+        return html.Div([
+            html.H2(f"カテゴリ: {category_id}"),
+            html.Div([create_card(e) for e in results])
+        ])
+
+    # 検索ページ
+    if pathname.startswith("/search"):
+        # /search?q=xxx をパース
+        parsed = urlparse(pathname + "?")
+        query = parse_qs(parsed.query).get("q", [""])[0]
+
+        results = search_entries(query=query)
+
+        return html.Div([
+            html.H2(f"検索結果: {query}"),
+            html.Div([create_card(e) for e in results])
+        ])
+
+    # エントリ詳細ページ
+    if pathname.startswith("/entry/"):
+        entry_id = pathname.split("/")[-1]
+        md = load_markdown(entry_id)
+
+        return html.Div([
+            dcc.Markdown(md)
+        ])
+
+    # 404
+    return html.Div("404 Not Found")
+
+
+# -----------------------------
+# 検索ボタン → URL 書き換え
+# -----------------------------
 @app.callback(
-    Output("content-area", "children"),
-    Input({"type": "entry-link", "id": dash.ALL}, "n_clicks"),
+    Output("url", "pathname"),
+    Input("search-button", "n_clicks"),
+    Input("search-input", "value"),
     prevent_initial_call=True
 )
-def display_content(n_clicks):
-    ctx = dash.callback_context
-    if not ctx.triggered or all(c is None for c in n_clicks):
-        return ""
+def update_search(n_clicks, value):
+    if value:
+        return f"/search?q={value}"
+    return "/"
 
-    # {"type":"entry-link","id":"xxx"} を安全にパース
-    raw = ctx.triggered[0]["prop_id"].split(".")[0]
-    entry_info = json.loads(raw.replace("'", '"'))
-    entry_id = entry_info["id"]
 
-    # INDEX_CACHE を直接参照（高速）
-    entry = next((e for e in INDEX_CACHE if e["id"] == entry_id), None)
-
-    if not entry:
-        return "エントリが見つかりません。"
-
-    html_body = load_markdown(entry["body"])
-
-    return html.Div([
-        html.H2(entry["title"]),
-        dcc.Markdown(html_body, dangerously_allow_html=True)
-    ])
-
+# -----------------------------
+# サーバー起動（Dash 3.x）
+# -----------------------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8050, debug=True)
-
+    app.run(debug=True)

@@ -49,14 +49,31 @@ def reload_data_if_updated():
         INDEX_MTIME = current_mtime
         print(f"🔄 Knowledge DB reloaded (Total: {len(INDEX_CACHE)} entries)")
 
-def search_entries(query, include_body=False):
-    """検索ロジック（本文検索はオプション）"""
+def search_entries(query=None, category=None, include_body=False):
+    """検索ロジック（カテゴリフィルタ + スコアリング検索）"""
     reload_data_if_updated()
 
-    query = query.lower()
     results = []
 
-    for entry in INDEX_CACHE:
+    # -------------------------
+    # ① カテゴリフィルタ（query が None でも動く）
+    # -------------------------
+    filtered_entries = INDEX_CACHE
+    if category:
+        filtered_entries = [
+            e for e in INDEX_CACHE
+            if e.get("category") == category
+        ]
+
+    # -------------------------
+    # ② キーワード検索（query が None の場合はカテゴリ一覧を返す）
+    # -------------------------
+    if not query:
+        return filtered_entries
+
+    query = query.lower()
+
+    for entry in filtered_entries:
         score = 0
 
         # title
@@ -75,7 +92,7 @@ def search_entries(query, include_body=False):
         if query in entry["summary"].lower():
             score += 2
 
-        # body（全文検索はオプション）
+        # body（全文検索）
         if include_body:
             body_file = entry["body"]
             path = BODY_PATH_CACHE.get(body_file)
@@ -90,5 +107,6 @@ def search_entries(query, include_body=False):
         if score > 0:
             results.append((score, entry))
 
+    # スコア順に並べる
     results.sort(key=lambda x: x[0], reverse=True)
     return [entry for score, entry in results]

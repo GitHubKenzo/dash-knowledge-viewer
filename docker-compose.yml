@@ -5,10 +5,12 @@ services:
     restart: always
 
     environment:
-      KNOWLEDGE_DB_PATH: /knowledge-db
+      KNOWLEDGE_DB_PATH: /app
 
     volumes:
-      - /home/kenzo/projects/knowledge-db:/knowledge-db:ro
+      - /opt/knowledge-db/data:/app/data:ro
+      - /opt/knowledge-db/markdown:/app/markdown:ro
+      - /opt/knowledge-db/index.json:/app/index.json:ro
 
     ports:
       - "9001:8050"
