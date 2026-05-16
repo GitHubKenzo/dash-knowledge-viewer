@@ -72,8 +72,9 @@ def display_content(n_clicks):
 
     return html.Div([
         html.H2(entry["title"]),
-        html.Div(html_body, dangerously_allow_html=True)
+        dcc.Markdown(html_body, dangerously_allow_html=True)
     ])
 
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    app.run(host="0.0.0.0", port=8050, debug=True)
+

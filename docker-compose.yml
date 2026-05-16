@@ -1,0 +1,16 @@
+version: "3.9"
+
+services:
+  dash-knowledge-viewer:
+    build: .
+    container_name: dash-knowledge-viewer
+    restart: always
+
+    environment:
+      KNOWLEDGE_DB_PATH: /knowledge-db
+
+    volumes:
+      - /home/kenzo/projects/knowledge-db:/knowledge-db:ro
+
+    ports:
+      - "9001:8050"
